@@ -19,6 +19,7 @@ dic_casillas={0:[1,1],1:[2,1],2:[3,1],3:[4,1],4:[5,1],5:[6,1],6:[7,1],7:[8,1],
               50:[2,4],51:[2,3],52:[3,3],53:[4,3],54:[5,3],55:[6,3],56:[7,3],
               57:[8,3],58:[8,4],59:[8,5],60:[7,5],61:[6,5],62:[5,5]}
 
+ocas={}
 def pos_casilla(n):
     pos_cas=-1
     for k in dic_casillas:
@@ -47,22 +48,14 @@ class Ficha():
         return f"La ficha {self.color} está en la posición {self.casilla}"
     
     
-class Dado():
-    def __init__(self,n):
-        self.pos=[7,4]
-        self.randint=6*n
-        
-    def tirar(self):
-        i=random.randint(2*self.randint,self.randint)
-        return i
-    
+   
 class Game():
     def __init__(self, manager):
         self.posiciones=manager.list([0,0,0])
-        self.dado=manager.list(Dado(2))
         self.fichas=manager.list([Ficha(GREEN),Ficha(YELLOW),Ficha(BLUE)])
         self.lock=Lock()
         self.running=Value('i',0)
+        self.turnos=Value('i',0)
 
     def get_ficha(self, color):
         if color==GREEN:
@@ -81,29 +74,85 @@ class Game():
         return self.running.value==0
     
     def stop(self):
-        self.runninf.value=1
+        self.running.value=1
         
-    def turno(self,n):
+    def es_turno(self,n_ficha):
+        return self.turnos.value==n_ficha
+        
+    def ejecutar_turno(self,n):
         self.lock.acquire()
         f=self.fichas[n]
-        d=self.dado
-        i=d.tirar
-        f.move(i)    
+        i=random.randint(1,6)
+        f.move(i)   
+        casilla=self.posiciones[n]
+        for i in range(len(ocas)):
+            if casilla==ocas[i]:
+                casilla=ocas[(i+1)%len(ocas)]
+                f.move_hasta(casilla)
+                print("De oca a oca y tiro porque me toca")
+        if casilla==6:
+            f.move_hasta(12)
+            print("De puente a puente y tiro porque me lleva la corriente")
+        elif casilla==12:
+            f.move_hasta(6)
+            print("De puente a puente y tiro porque me lleva la corriente")
+        elif casilla==26:
+            f.move_hasta(53)
+            print("De dado a daod y tiro popque me ha tocado")
+        elif casilla==53:
+            f.move_hasta(26)
+            print("De dado a daod y tiro popque me ha tocado")
+        elif casilla==42:
+            f.move_hasta(30)
+            print("Del laberinto al 30")
+        elif casilla==58:
+            f.move_hasta(0)
+            print("Has muerto, vuelves a la casilla de salida")
+        elif casilla>62:
+            dif=casilla-62
+            f.move_hasta(62-dif)
+            
+        elif casilla==15:
+            pos=random.randint(1,6)
+            if pos%2==0:
+                f.move_hasta(0)
+            else:
+                f.move_hasta(35)
+            print("He caido en el rayo, a veces acelero, a veces me desmayo")
+        else:
+            self.turnos.value=(self.turnos.value+1)%3
         self.lock.release()
         
     def get_info(self):
         info = {
-            'cas_verde': self.fichas[0].get_casilla(),
-            'cas_amarillo': self.fichas[1].get_casilla(),
-            'cas_azul': self.fichas[2].get_casilla(),
-            'casillas': list(self.posiciones),
-            'is_running': self.running.value == 0
+            'pos_1': self.fichas[0].get_casilla(),
+            'pos_2': self.fichas[1].get_casilla(),
+            'pos_3': self.fichas[2].get_casilla(),
+            'turno': self.turnos.value,
+            'running': self.running.value
         }
         return info
     
     def __str__(self):
         return f"verde:{self.fichas[0].get_casilla()}, amarillo:{self.fichas[1].get_casilla()}, azul:{self.fichas[2].get_casilla()}"
- 
+
+def player(n_ficha,conn,game):
+    try:
+        print(f"Jugador nuevo")
+        conn.send((n_ficha,game.get_info()))
+        while game.is_running():
+            command=""
+            while command != "next":
+                command = conn.recv()
+                if command == "up":
+                    game.ejecutar_turno()
+            conn.send(game.get_info())
+    except:
+        traceback.print_exc()
+        conn.close()
+    finally:
+        print(f"Madre mía se acabo la partida")
+        
 def main(ip_address):
     manager = Manager()
     try:
@@ -114,11 +163,16 @@ def main(ip_address):
             game = Game(manager)
             while True:
                 print(f"accepting connection {n_fichas}")
+                conn = listener.accept()
                 if n_fichas<3:
-                    conn = listener.accept()
                     fichas[n_fichas] = Process(target=player,
                                             args=(n_fichas, conn, game))
                     n_fichas += 1
+                    if n_fichas==3:
+                        fichas[0].start()
+                        fichas[1].start()
+                        fichas[2].start()
+                
     
     except Exception as e:
         traceback.print_exc()

@@ -1,8 +1,10 @@
 import pygame
 import os
 import time
-
-
+from multiprocessing.connection import Listener, Client
+from multiprocessing import Process, Manager, Value, Lock
+import sys
+import traceback
 
 #Definimos colores
 BLACK = (0, 0, 0)
@@ -62,7 +64,35 @@ class Ficha():
     def __str__(self):
         return f"La ficha {self.color} está en la posición {self.casilla}"
     
+class Game():
+    def __init__(self):
+        self.players=[Ficha(i) for i in range(3)]
+        self.turno=0
+        self.running=True
+        self.lock=Lock()
     
+    def get_turno(self):
+        return self.turno
+    
+    def stop(self):
+        self.running=False
+    
+    def is_running(self):
+        return self.running
+    
+    def set_pos_player(self,n_ficha,pos):
+        self.players[n_ficha].casilla=pos
+    
+    def set_turno(self,turno):
+        self.turno=turno
+    
+    def update(self,gameinfo):
+        self.set_pos_player(0,gameinfo['pos_1'])
+        self.set_pos_player(1,gameinfo['pos_2'])
+        self.set_pos_player(2,gameinfo['pos_3'])
+        self.set_turno(gameinfo['turno'])
+        self.running=gameinfo['running']
+        
 class Player(pygame.sprite.Sprite):
     def __init__(self,ficha):
         pygame.sprite.Sprite.__init__(self)
@@ -88,7 +118,8 @@ class Display():
          self.background = pygame.image.load('oca.png')
          pygame.init()
          pygame.display.set_caption("Bienvenido a la oca")
-
+    
+    
      def refresh(self):
          self.all_sprites.update()
          self.screen.blit(self.background, (0, 0))
@@ -97,30 +128,67 @@ class Display():
 
      def tick(self):
          self.clock.tick(FPS)
-
+     
+     def analyse_events(self,n_ficha):
+         events=["up"]
+         for event in pygame.event.get():
+             if event.type == pygame.KEYDOWN:
+                 if event.key == pygame.K_ESCAPE:
+                     events.append("quit")
+                 elif event.type==pygame.K_UP:
+                     events.append("up")
+             elif event.type == pygame.QUIT:
+                 events.append("quit")
+         return events
+ 
      def quit():
          pygame.quit()
         
 
-
+def main(ip_address,player):
+    try:
+        with Client((ip_address, 6000), authkey=b'secret password') as conn:
+            game = Game()
+            n_ficha,gameinfo = conn.recv()
+            print(f"I am playing {n_ficha}")
+            game.update(gameinfo)#ahora mismo no funciona porque conn.recv no manda nada eso lo tenemos que arreglar en la sala
+            display = Display(player)
+            while game.is_running():
+                events=display.analyse_events(n_ficha)
+                for event in events:
+                    conn.send(event)
+                    if event.type == pygame.QUIT: #cerrar ventana de juego
+                        game.stop()
+                conn.send("next")
+                gameinfo = conn.recv()
+                game.update(gameinfo)
+                display.refresh()
+                display.tick()
+    except:
+        traceback.print_exc()
+    finally:
+        pygame.quit()
+"""
 def main(ficha,player):
     try:
+        game=Game()
         display = Display(player)
-    
-        running = True
-        while running:
+        while game.is_running():
             for event in pygame.event.get():
                 if event.type == pygame.QUIT: #cerrar ventana de juego
                     running = False
             display.refresh()
             display.tick()
-
     finally:
         pygame.quit()
         
 
 ficha = Ficha(RED)
 player = Player(ficha)
-
+"""
 if __name__=="__main__":
-    main(ficha,player)
+    ip_address = "127.0.0.1"
+    player=Player(Ficha(RED))
+    if len(sys.argv)>1:
+        ip_address = sys.argv[1]
+    main(ip_address,player)
