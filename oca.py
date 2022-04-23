@@ -109,10 +109,10 @@ class Player(pygame.sprite.Sprite):
 
 
 class Display():
-     def __init__(self, player):
-         self.player = player
+     def __init__(self, game):
+         self.game = game
          self.all_sprites = pygame.sprite.Group()
-         self.all_sprites.add(player)   
+         #self.all_sprites.add(game)   
          self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
          self.clock =  pygame.time.Clock()  #FPS
          self.background = pygame.image.load('oca.png')
@@ -129,8 +129,8 @@ class Display():
      def tick(self):
          self.clock.tick(FPS)
      
-     def analyse_events(self,n_ficha):
-         events=["up"]
+     def analyse_events(self):
+         events=[]
          for event in pygame.event.get():
              if event.type == pygame.KEYDOWN:
                  if event.key == pygame.K_ESCAPE:
@@ -145,20 +145,22 @@ class Display():
          pygame.quit()
         
 
-def main(ip_address,player):
+def main(ip_address):
     try:
-        with Client((ip_address, 6000), authkey=b'secret password') as conn:
+        with Client((ip_address,6565), authkey=b'secret password') as conn:
             game = Game()
             n_ficha,gameinfo = conn.recv()
             print(f"I am playing {n_ficha}")
             game.update(gameinfo)#ahora mismo no funciona porque conn.recv no manda nada eso lo tenemos que arreglar en la sala
-            display = Display(player)
+            display = Display(game)
+            print(game.is_running())
             while game.is_running():
-                events=display.analyse_events(n_ficha)
+                events=display.analyse_events()
+                print("events: "+str(events))
                 for event in events:
                     conn.send(event)
-                    if event.type == pygame.QUIT: #cerrar ventana de juego
-                        game.stop()
+                #if event == "quit": #cerrar ventana de juego
+                 #   game.stop()
                 conn.send("next")
                 gameinfo = conn.recv()
                 game.update(gameinfo)
@@ -191,4 +193,4 @@ if __name__=="__main__":
     player=Player(Ficha(RED))
     if len(sys.argv)>1:
         ip_address = sys.argv[1]
-    main(ip_address,player)
+    main(ip_address)

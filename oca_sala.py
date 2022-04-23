@@ -1,5 +1,5 @@
 
-from multiprocessing.connection import Listener
+from multiprocessing.connection import Listener, Client
 from multiprocessing import Process, Manager, Value, Lock
 import random
 import traceback
@@ -54,7 +54,7 @@ class Game():
         self.posiciones=manager.list([0,0,0])
         self.fichas=manager.list([Ficha(GREEN),Ficha(YELLOW),Ficha(BLUE)])
         self.lock=Lock()
-        self.running=Value('i',0)
+        self.running=Value('b',True)
         self.turnos=Value('i',0)
 
     def get_ficha(self, color):
@@ -71,7 +71,7 @@ class Game():
         return self.posiciones
 
     def is_running(self):
-        return self.running.value==0
+        return self.running.value
     
     def stop(self):
         self.running.value=1
@@ -140,14 +140,20 @@ def player(n_ficha,conn,game):
     try:
         print(f"Jugador nuevo")
         conn.send((n_ficha,game.get_info()))
+        print("recibe")
+        print(game.is_running())
         while game.is_running():
             command=""
+            print("entra")
             while command != "next":
-                command = conn.recv()
+                print(conn.poll())
+                command = conn.recv()#EL PROBLEMA ESTÁ AQUÍ, POR ALGÚN MOTIVO ESTO NO RECIBE NADA
+                print("el comando es" +command)
                 if command == "up":
-                    game.ejecutar_turno()
+                    game.ejecutar_turno(n_ficha)
             conn.send(game.get_info())
     except:
+        print("except")
         traceback.print_exc()
         conn.close()
     finally:
@@ -156,7 +162,7 @@ def player(n_ficha,conn,game):
 def main(ip_address):
     manager = Manager()
     try:
-        with Listener((ip_address, 6000),
+        with Listener((ip_address,6565),
                       authkey=b'secret password') as listener:
             n_fichas = 0
             fichas = [None, None, None]
@@ -164,15 +170,16 @@ def main(ip_address):
             while True:
                 print(f"accepting connection {n_fichas}")
                 conn = listener.accept()
-                if n_fichas<3:
-                    fichas[n_fichas] = Process(target=player,
+                fichas[n_fichas] = Process(target=player,
                                             args=(n_fichas, conn, game))
-                    n_fichas += 1
-                    if n_fichas==3:
-                        fichas[0].start()
-                        fichas[1].start()
-                        fichas[2].start()
-                
+                n_fichas += 1
+                if n_fichas==3:
+                    fichas[0].start()
+                    fichas[1].start()
+                    fichas[2].start()
+                    n_fichas=0
+                    fichas=[None,None,None]
+                    game=Game(manager)
     
     except Exception as e:
         traceback.print_exc()
