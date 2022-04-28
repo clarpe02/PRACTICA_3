@@ -1,9 +1,6 @@
+from multiprocessing.connection import Client
+import sys, os
 import pygame
-import os
-import time
-from multiprocessing.connection import Listener, Client
-from multiprocessing import Process, Manager, Value, Lock
-import sys
 import traceback
 
 #Definimos colores
@@ -69,7 +66,9 @@ class Game():
         self.players=[Ficha(i) for i in range(3)]
         self.turno=0
         self.running=True
-        self.lock=Lock()
+        
+    def get_player(self, n_ficha):
+        return self.players[n_ficha]
     
     def get_turno(self):
         return self.turno
@@ -95,13 +94,14 @@ class Game():
         
 class Player(pygame.sprite.Sprite):
     def __init__(self,ficha):
-        pygame.sprite.Sprite.__init__(self)
+        super().__init__() #PROBAMOS CON ESTO EN VEZ DE LO DE ABAJO
+        #pygame.sprite.Sprite.__init__(self)
         self.ficha = ficha
         self.image = pygame.Surface((50,50)) #Tamaño jugador(ficha rectangular)
         self.image.fill(self.ficha.get_color()) #La ficha será del color elegido
         self.rect = self.image.get_rect() #Rectángulo de posición
         self.rect.center = (0,0) #Queremos que las fichas se inicien en la primera casilla
-        
+        self.update()#ESTO NO SÉ SI HACE FALTA
         
     def update(self):
         pos = self.ficha.get_pos()
@@ -111,8 +111,10 @@ class Player(pygame.sprite.Sprite):
 class Display():
      def __init__(self, game):
          self.game = game
+         self.player = [Player(self.game.get_player(i)) for i in range(3)]
          self.all_sprites = pygame.sprite.Group()
-         #self.all_sprites.add(game)   
+         for player  in self.player:
+            self.all_sprites.add(player)
          self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
          self.clock =  pygame.time.Clock()  #FPS
          self.background = pygame.image.load('oca.png')
@@ -129,13 +131,13 @@ class Display():
      def tick(self):
          self.clock.tick(FPS)
      
-     def analyse_events(self):
+     def analyse_events(self,n_ficha):
          events=[]
          for event in pygame.event.get():
              if event.type == pygame.KEYDOWN:
                  if event.key == pygame.K_ESCAPE:
                      events.append("quit")
-                 elif event.type==pygame.K_UP:
+                 elif event.key == pygame.K_UP:
                      events.append("up")
              elif event.type == pygame.QUIT:
                  events.append("quit")
@@ -145,22 +147,20 @@ class Display():
          pygame.quit()
         
 
-def main(ip_address):
+def main(ip_address,player):
     try:
-        with Client((ip_address,6565), authkey=b'secret password') as conn:
+        with Client((ip_address, 6000), authkey=b'secret password') as conn:
             game = Game()
             n_ficha,gameinfo = conn.recv()
             print(f"I am playing {n_ficha}")
             game.update(gameinfo)#ahora mismo no funciona porque conn.recv no manda nada eso lo tenemos que arreglar en la sala
             display = Display(game)
-            print(game.is_running())
             while game.is_running():
-                events=display.analyse_events()
-                print("events: "+str(events))
+                events=display.analyse_events(n_ficha)
                 for event in events:
                     conn.send(event)
-                #if event == "quit": #cerrar ventana de juego
-                 #   game.stop()
+                    if event.type == pygame.QUIT: #cerrar ventana de juego
+                        game.stop()
                 conn.send("next")
                 gameinfo = conn.recv()
                 game.update(gameinfo)
@@ -170,27 +170,10 @@ def main(ip_address):
         traceback.print_exc()
     finally:
         pygame.quit()
-"""
-def main(ficha,player):
-    try:
-        game=Game()
-        display = Display(player)
-        while game.is_running():
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT: #cerrar ventana de juego
-                    running = False
-            display.refresh()
-            display.tick()
-    finally:
-        pygame.quit()
-        
 
-ficha = Ficha(RED)
-player = Player(ficha)
-"""
 if __name__=="__main__":
     ip_address = "127.0.0.1"
-    player=Player(Ficha(RED))
+    player=Player(Ficha(BLUE))
     if len(sys.argv)>1:
         ip_address = sys.argv[1]
-    main(ip_address)
+    main(ip_address,player)

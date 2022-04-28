@@ -34,6 +34,8 @@ dic_casillas={0:[1,1],1:[2,1],2:[3,1],3:[4,1],4:[5,1],5:[6,1],6:[7,1],7:[8,1],
               50:[2,4],51:[2,3],52:[3,3],53:[4,3],54:[5,3],55:[6,3],56:[7,3],
               57:[8,3],58:[8,4],59:[8,5],60:[7,5],61:[6,5],62:[5,5]}
 
+colores=[GREEN,YELLOW,BLUE]
+
 def pos_casilla(n):
     pos_cas=-1
     for k in dic_casillas:
@@ -64,9 +66,12 @@ class Ficha():
     def __str__(self):
         return f"La ficha {self.color} está en la posición {self.casilla}"
     
+    def update_pos_ficha(self):
+        self.pos= pos_casilla(self.casilla)
+        
 class Game():
     def __init__(self):
-        self.players=[Ficha(i) for i in range(3)]
+        self.players=[Ficha(i) for i in colores]
         self.turno=0
         self.running=True
         self.lock=Lock()
@@ -86,10 +91,15 @@ class Game():
     def set_turno(self,turno):
         self.turno=turno
     
+    def update_pos_game(self):
+        for i in self.players:
+            i.update_pos_ficha()
+            
     def update(self,gameinfo):
         self.set_pos_player(0,gameinfo['pos_1'])
         self.set_pos_player(1,gameinfo['pos_2'])
         self.set_pos_player(2,gameinfo['pos_3'])
+        self.update_pos_game()
         self.set_turno(gameinfo['turno'])
         self.running=gameinfo['running']
         
@@ -112,7 +122,9 @@ class Display():
      def __init__(self, game):
          self.game = game
          self.all_sprites = pygame.sprite.Group()
-         #self.all_sprites.add(game)   
+         self.all_sprites.add(Player(self.game.players[0]))   
+         self.all_sprites.add(Player(self.game.players[1])) 
+         self.all_sprites.add(Player(self.game.players[2])) 
          self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
          self.clock =  pygame.time.Clock()  #FPS
          self.background = pygame.image.load('oca.png')
@@ -135,7 +147,7 @@ class Display():
              if event.type == pygame.KEYDOWN:
                  if event.key == pygame.K_ESCAPE:
                      events.append("quit")
-                 elif event.type==pygame.K_UP:
+                 elif event.key==pygame.K_UP:
                      events.append("up")
              elif event.type == pygame.QUIT:
                  events.append("quit")
@@ -145,7 +157,7 @@ class Display():
          pygame.quit()
         
 
-def main(ip_address):
+def main(ip_address,game):
     try:
         with Client((ip_address,6565), authkey=b'secret password') as conn:
             game = Game()
@@ -155,14 +167,21 @@ def main(ip_address):
             display = Display(game)
             print(game.is_running())
             while game.is_running():
-                events=display.analyse_events()
-                print("events: "+str(events))
+                print("Es tu turno: Pulsa up para tirar")
+                events = display.analyse_events()
+                print(events)
+                print("casilla:")
+                print(game.players[0].casilla)
                 for event in events:
                     conn.send(event)
+                    if event == "quit":
+                        game.stop()
                 #if event == "quit": #cerrar ventana de juego
                  #   game.stop()
                 conn.send("next")
                 gameinfo = conn.recv()
+                print("Información del juego")
+                print(gameinfo)
                 game.update(gameinfo)
                 display.refresh()
                 display.tick()
@@ -193,4 +212,4 @@ if __name__=="__main__":
     player=Player(Ficha(RED))
     if len(sys.argv)>1:
         ip_address = sys.argv[1]
-    main(ip_address)
+    main(ip_address,player)
