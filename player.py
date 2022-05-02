@@ -168,8 +168,8 @@ class Display():
          text2 = font.render(turno_msj,0.7,self.game.players[self.game.turno].get_color())
          text3 = font.render(dado_msj, 1, RED)
          self.screen.blit(text, (50, 10))
-         self.screen.blit(text2,(10,600))
-         self.screen.blit(text3,(10,150))
+         self.screen.blit(text2,(220,320))
+         self.screen.blit(text3,(220,420))
          self.all_sprites.draw(self.screen)
          pygame.display.flip()
 
