@@ -29,7 +29,7 @@ dic_casillas={0:[1,1],1:[2,1],2:[3,1],3:[4,1],4:[5,1],5:[6,1],6:[7,1],7:[8,1],
               50:[2,4],51:[2,3],52:[3,3],53:[4,3],54:[5,3],55:[6,3],56:[7,3],
               57:[8,3],58:[8,4],59:[8,5],60:[7,5],61:[6,5],62:[5,5]}
 
-colores=[GREEN,YELLOW,BLUE]
+colores=[GREEN,YELLOW,BLUE,RED,BLACK]
 
 def pos_casilla(n):
     pos_cas=-1
@@ -67,15 +67,28 @@ class Ficha():
         self.pos=pos_cas
         
     def __str__(self):
-        return f"La ficha {self.color} está en la posición {self.casilla}"
+        if self.color==BLUE:
+            return f"BLUE"
+        if self.color==BLACK:
+            return f"BLACK"
+        if self.color==RED:
+            return f"RED"
+        if self.color==YELLOW:
+            return f"YELLOW"
+        if self.color==GREEN:
+            return f"GREEN"
+        if self.color==WHITE:
+            return f"WHITE"
     
     def update_pos_ficha(self):
         self.pos= pos_casilla(self.casilla)
      
 class Game():
-    def __init__(self):
-        self.players=[Ficha(i) for i in colores]
+    def __init__(self,n_players):
+        self.players=[Ficha(colores[i]) for i in range(n_players)]
+        self.n_players=n_players
         self.turno=0
+        self.dado=0
         self.running=True
         self.lock=Lock()
         self.mensaje=""
@@ -100,10 +113,14 @@ class Game():
             i.update_pos_ficha()
             
     def update(self,gameinfo):
-        self.set_pos_player(0,gameinfo['pos_1'])
-        self.set_pos_player(1,gameinfo['pos_2'])
-        self.set_pos_player(2,gameinfo['pos_3'])
+        for i in range(self.n_players):
+            self.set_pos_player(i,gameinfo['posiciones'][i])
+            
+        #self.set_pos_player(0,gameinfo['pos_1'])
+        #self.set_pos_player(1,gameinfo['pos_2'])
+        #self.set_pos_player(2,gameinfo['pos_3'])
         self.update_pos_game()
+        self.dado=gameinfo['dado']
         self.mensaje=gameinfo['mensaje']
         self.set_turno(gameinfo['turno'])
         self.running=gameinfo['running']
@@ -128,9 +145,11 @@ class Display():
      def __init__(self, game):
          self.game = game
          self.all_sprites = pygame.sprite.Group()
-         self.all_sprites.add(Player(self.game.players[0]))   
-         self.all_sprites.add(Player(self.game.players[1])) 
-         self.all_sprites.add(Player(self.game.players[2])) 
+         for i in range(game.n_players):
+             self.all_sprites.add(Player(self.game.players[i]))
+         #self.all_sprites.add(Player(self.game.players[0]))   
+         #self.all_sprites.add(Player(self.game.players[1])) 
+         #self.all_sprites.add(Player(self.game.players[2])) 
          self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
          self.clock =  pygame.time.Clock()  #FPS
          self.background = pygame.image.load('oca.png')
@@ -142,9 +161,15 @@ class Display():
          self.all_sprites.update()
          self.screen.blit(self.background, (0, 0))
          mensaje = self.game.mensaje
+         turno_msj = "Turno de: "+str(self.game.players[self.game.turno])
+         dado_msj = "La última tirada fue: "+str(self.game.dado)
          font = pygame.font.SysFont('Helvetica', 40)
          text = font.render(mensaje, 1, RED)
+         text2 = font.render(turno_msj,0.7,self.game.players[self.game.turno].get_color())
+         text3 = font.render(dado_msj, 1, RED)
          self.screen.blit(text, (50, 10))
+         self.screen.blit(text2,(10,600))
+         self.screen.blit(text3,(10,150))
          self.all_sprites.draw(self.screen)
          pygame.display.flip()
 
@@ -167,29 +192,24 @@ class Display():
          pygame.quit()
         
 
-def main(ip_address,game):
+def main(ip_address,n_players):
     try:
         with Client((ip_address,6565), authkey=b'secret password') as conn:
-            game = Game()
+            game = Game(n_players)
             n_ficha,gameinfo = conn.recv()
+            
             print(f"I am playing {n_ficha}")
             game.update(gameinfo)
             display = Display(game)
             print(game.is_running())
             while game.is_running():
-                print("Es tu turno: Pulsa up para tirar")
                 events = display.analyse_events()
-                print(events)
-                print("casilla:")
-                print(game.players[0].casilla)
                 for event in events:
                     conn.send(event)
                     if event == "quit":
                         game.stop()
                 conn.send("next")
                 gameinfo = conn.recv()
-                print("Información del juego")
-                print(gameinfo)
                 game.update(gameinfo)
                 display.refresh()
                 display.tick()
@@ -200,7 +220,10 @@ def main(ip_address,game):
 
 if __name__=="__main__":
     ip_address = "127.0.0.1"
+    n_player=3
     player=Player(Ficha(RED))
     if len(sys.argv)>1:
         ip_address = sys.argv[1]
-    main(ip_address,player)
+    if len(sys.argv)>2:
+        n_player = int(sys.argv[2])
+    main(ip_address,n_player)

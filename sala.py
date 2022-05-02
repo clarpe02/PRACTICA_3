@@ -55,13 +55,15 @@ class Ficha():
     
    
 class Game():
-    def __init__(self, manager):
-        self.posiciones=manager.list([0,0,0])
-        self.fichas=manager.list([Ficha(GREEN),Ficha(YELLOW),Ficha(BLUE)])
+    def __init__(self, manager,n_players):
+        self.posiciones=manager.list([0 for _ in range(n_players)])
+        self.n_players=n_players
+        #self.fichas=manager.list([Ficha(GREEN),Ficha(YELLOW),Ficha(BLUE)])
         self.lock=Lock()
         self.running=Value('b',True)
+        self.dado=Value('i',0)
         self.turnos=Value('i',0)
-        self.bloqueo=manager.list([False,False,False])
+        self.bloqueo=manager.list([False for _ in range(n_players)])
         self.turnos_bloqueo=manager.list([0,0,0])
         self.mensaje=""
 
@@ -94,24 +96,27 @@ class Game():
         print(self.bloqueo[n])
         if self.bloqueo[n]==True:
             self.turnos_bloqueo[n]-=1
+            mensaje="Turno bloqueado"
             if self.turnos_bloqueo[n]==0:
                 self.bloqueo[n]=False
-            self.turnos.value=(self.turnos.value+1)%3
+            self.turnos.value=(self.turnos.value+1)%n_players
         else:
             i=random.randint(1,6)
+            self.dado.value=i
             self.posiciones[n]=self.posiciones[n]+i  
             casilla=self.posiciones[n]
             print("La casilla es :" +str(casilla))
             oca=False
             puente=False
             dado=False
-            while i<len(ocas) and not oca:
-                if casilla==ocas[i]:
-                    casilla=ocas[(i+1)%len(ocas)]
+            j=0
+            while j<len(ocas) and not oca:
+                if casilla==ocas[j]:
+                    casilla=ocas[(j+1)%len(ocas)]
                     self.posiciones[n]=casilla
                     oca=True
                     mensaje="De oca a oca y tiro porque me toca"
-                i+=1
+                j+=1
             if casilla==6:
                 self.posiciones[n]=12
                 puente=True
@@ -151,25 +156,34 @@ class Game():
                 mensaje="Has caido en la prisión, tres turnos sin tirar"
             print("oca"+str(oca)+"puente"+str(puente)+"dado"+str(dado))
             if not oca and not puente and not dado:
-                self.turnos.value=(self.turnos.value+1)%3
+                self.turnos.value=(self.turnos.value+1)%self.n_players
         print("TUrno"+str(self.turnos.value))
         self.mensaje=mensaje
         self.lock.release()
+    
+    def lista_pos(self):
+        k=[0 for _ in range(self.n_players)]
+        for i in range(len(self.posiciones)):
+            k[i]=self.posiciones[i]
+        return k
         
     def get_info(self):
         info = {
-            'pos_1': self.posiciones[0],
-            'pos_2': self.posiciones[1],
-            'pos_3': self.posiciones[2],
+            'posiciones': self.lista_pos(),
+            'n_players': self.n_players,
+            #'pos_1': self.posiciones[0],
+            #'pos_2': self.posiciones[1],
+            #'pos_3': self.posiciones[2],
             'turno': self.turnos.value,
             'running': self.running.value,
-            'mensaje': self.mensaje
+            'mensaje': self.mensaje,
+            'dado' : self.dado.value,
         }
         return info
-    
+    """
     def __str__(self):
         return f"verde:{self.fichas[0].get_casilla()}, amarillo:{self.fichas[1].get_casilla()}, azul:{self.fichas[2].get_casilla()}"
-
+"""
 def player(n_ficha,conn,game):
     try:
         print(f"Jugador nuevo")
@@ -197,35 +211,35 @@ def player(n_ficha,conn,game):
     finally:
         print(f"Madre mía se acabo la partida")
         
-def main(ip_address):
+def main(ip_address,n_players):
     manager = Manager()
     try:
         with Listener((ip_address,6565),
                       authkey=b'secret password') as listener:
             n_fichas = 0
-            fichas = [None, None, None]
-            game = Game(manager)
+            fichas = [None for _ in range(n_players)]
+            game = Game(manager,n_players)
             while True:
                 print(f"accepting connection {n_fichas}")
                 conn = listener.accept()
                 fichas[n_fichas] = Process(target=player,
                                             args=(n_fichas, conn, game))
                 n_fichas += 1
-                if n_fichas==3:
-                    fichas[0].start()
-                    fichas[1].start()
-                    fichas[2].start()
+                if n_fichas==n_players:
+                    for i in range(n_players):
+                        fichas[i].start()
                     n_fichas=0
-                    fichas=[None,None,None]
-                    game=Game(manager)
-    
+                    fichas=[None for _ in range(n_players)]
+                    game=Game(manager,n_players)
     except Exception as e:
         traceback.print_exc()
     
     
 if __name__=='__main__':
     ip_address = "127.0.0.1"
+    n_players=3
     if len(sys.argv)>1:
         ip_address = sys.argv[1]
-
-    main(ip_address)
+    if len(sys.argv)>2:
+        n_players=int(sys.argv[2])
+    main(ip_address,n_players)
