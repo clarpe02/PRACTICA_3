@@ -1,0 +1,19 @@
+﻿Grupo 21
+Pablo Martínez Botet
+Clara Pérez Esteban
+Gonzalo Plasencia Boticario
+
+PRÁCTICA DE PROGRAMACIÓN CONCURRENTE
+
+Para esta práctica hemos hecho una versión del juego de la oca. En este documento explicaremos su funcionamiento y daremos una guia de uso.
+
+-Funcionamiento: El juego consta de dos archivos principales. El archivo sala y el archivo jugador. 
+El archivo jugador deben ejecutarlo cada uno de los jugadores. La idea es que cada jugador tenga una copia del juego.
+El archivo sala es el que ejecuta el juego. Almacena las posiciones de los jugadores y otros atributos importantes. Cuando un jugador manda un comando se ejecuta en la sala. Esta ejecuta el turno, teniendo en cuenta la tirada, a quién le toca y las distintas normas de la oca como que puedas volver a tirar o caigas en una casilla que te quite el turno. Una vez ejecuta el turno manda la información a cada uno de los jugadores y estos actualizan sus atributos de manera que estén todos sincronizados.
+
+-Guía de uso: A la hora de ejecutarlo en la terminal debemos tener en cuenta dos datos. La ip a la que nos queremos conectar y el número de jugadores. Si no se especifica se conectará a la ip:127.0.0.1 y n_jugadores=3. Un ejemplo de lo que poner en la terminal podría ser:
+
+python3 oca.py 127.0.0.1 4(127.0.0.01 es la ip y 4 es el número de jugadores)
+python3 player.py 127.0.0.1 4
+
+Es importante que los datos cuadren, de otra manera puede haber fichas que no se muevan,etc.
